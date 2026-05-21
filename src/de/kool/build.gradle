@@ -1,0 +1,13 @@
+ext {
+    extName = 'Kool'
+    extClass = '.Kool'
+    extVersionCode = 22
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:filemoonextractor'))
+    implementation(project(':lib:streamtapeextractor'))
+    implementation(project(':lib:voeextractor'))
+}

@@ -1,0 +1,13 @@
+ext {
+    extName = 'RouVideo'
+    extClass = '.RouVideoFactory'
+    extVersionCode = 11
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:playlistutils"))
+    implementation(project(":lib:i18n"))
+}

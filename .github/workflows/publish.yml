@@ -1,0 +1,108 @@
+name: Build and publish repo
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'lib/**'
+      - 'core/**'
+      - 'buildSrc/**'
+      - 'gradle/**'
+      - '*.gradle'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - 'settings.gradle.kts'
+      - '.github/scripts/create-repo.py'
+      - '.github/workflows/publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: true
+
+env:
+  OUTPUT_REPO: msrofficial/anime-repo
+  OUTPUT_BRANCH: repo
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare signing key
+        run: |
+          echo "${{ secrets.SIGNING_KEY_BASE64 }}" | base64 -d > signingkey.jks
+          chmod 600 signingkey.jks
+
+      - name: Build Toonstream
+        env:
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew --no-daemon :src:hi:toonstream:assembleRelease
+
+      - name: Create extension repo artifacts
+        env:
+          SIGNING_KEY_FINGERPRINT: ${{ secrets.SIGNING_KEY_FINGERPRINT }}
+        run: |
+          mkdir -p repo/apk
+          cp src/hi/toonstream/build/outputs/apk/release/*-release.apk repo/apk/
+          for apk in repo/apk/*-release.apk; do
+            mv "$apk" "${apk%-release.apk}.apk"
+          done
+
+          inspector_url="$(curl -s https://api.github.com/repos/komikku-app/aniyomi-extensions-inspector/releases/latest | jq -r '.assets[0].browser_download_url')"
+          curl -L "$inspector_url" -o Inspector.jar
+          java -jar Inspector.jar repo/apk output.json tmp
+          python .github/scripts/create-repo.py
+
+          cat > repo/repo.json <<EOF
+          {
+            "meta": {
+              "name": "MSR Anime Extensions",
+              "shortName": "MSR",
+              "website": "https://github.com/msrofficial/anime-extensions",
+              "signingKeyFingerprint": "$SIGNING_KEY_FINGERPRINT"
+            }
+          }
+          EOF
+
+      - name: Publish to anime-repo
+        env:
+          REPO_PUSH_TOKEN: ${{ secrets.REPO_PUSH_TOKEN }}
+        run: |
+          git clone --depth 1 --branch "$OUTPUT_BRANCH" "https://x-access-token:${REPO_PUSH_TOKEN}@github.com/${OUTPUT_REPO}.git" out || true
+          if [ ! -d out/.git ]; then
+            git clone --depth 1 "https://x-access-token:${REPO_PUSH_TOKEN}@github.com/${OUTPUT_REPO}.git" out
+            cd out
+            git checkout --orphan "$OUTPUT_BRANCH"
+            git rm -rf . || true
+            cd ..
+          fi
+
+          rm -rf out/*
+          cp -r repo/* out/
+          cd out
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Publish extension repo" || exit 0
+          git push origin "$OUTPUT_BRANCH"

@@ -1,0 +1,11 @@
+ext {
+    extName = 'Tokuzilla'
+    extClass = '.Tokuzilla'
+    extVersionCode = 28
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:chillxextractor'))
+}

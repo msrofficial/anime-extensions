@@ -1,0 +1,16 @@
+ext {
+    extName = 'LACartoons'
+    extClass = '.Lacartoons'
+    extVersionCode = 21
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:okruextractor'))
+    implementation(project(':lib:streamwishextractor'))
+    implementation(project(':lib:vidhideextractor'))
+    implementation(project(':lib:voeextractor'))
+    implementation(project(':lib:youruploadextractor'))
+    implementation(project(':lib:universalextractor'))
+}

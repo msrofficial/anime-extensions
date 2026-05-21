@@ -1,0 +1,14 @@
+ext {
+    extName = 'Anime-Loads'
+    extClass = '.AnimeLoads'
+    extVersionCode = 24
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:voeextractor'))
+    implementation(project(':lib:streamtapeextractor'))
+    implementation(project(':lib:doodextractor'))
+}

@@ -1,0 +1,11 @@
+ext {
+    extName = 'UAKino'
+    extClass = '.UAKino'
+    extVersionCode = 3
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:playlistutils'))
+}

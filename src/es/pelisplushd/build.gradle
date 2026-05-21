@@ -1,0 +1,13 @@
+ext {
+    extName = 'PelisPlusHD'
+    extClass = '.Pelisplushd'
+    themePkg = 'pelisplus'
+    baseUrl = 'https://pelisplushd.bz'
+    overrideVersionCode = 82
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:cryptoaes'))
+}
