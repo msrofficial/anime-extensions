@@ -37,6 +37,8 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -52,19 +54,141 @@ jobs:
           echo "${{ secrets.SIGNING_KEY_BASE64 }}" | base64 -d > signingkey.jks
           chmod 600 signingkey.jks
 
-      - name: Build Toonstream
+      - name: Select extensions to build
+        id: select
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          import re
+          import subprocess
+          import urllib.request
+          from pathlib import Path
+
+          zero = "0" * 40
+          before = "${{ github.event.before }}"
+          after = "${{ github.sha }}"
+
+          if "${{ github.event_name }}" == "workflow_dispatch" or before == zero:
+              changed = subprocess.check_output(
+                  ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", after],
+                  text=True,
+              ).splitlines()
+          else:
+              changed = subprocess.check_output(
+                  ["git", "diff", "--name-only", before, after],
+                  text=True,
+              ).splitlines()
+
+          def published_modules():
+              url = "https://raw.githubusercontent.com/${{ env.OUTPUT_REPO }}/${{ env.OUTPUT_BRANCH }}/index.min.json"
+              try:
+                  with urllib.request.urlopen(url, timeout=20) as response:
+                      index = json.load(response)
+              except Exception:
+                  return set()
+
+              modules = set()
+              for entry in index:
+                  apk = entry.get("apk", "")
+                  match = re.match(r"aniyomi-([^.]+)\.([^-]+)-v", apk)
+                  if match:
+                      modules.add(f"{match.group(1)}/{match.group(2)}")
+              return modules
+
+          modules = set()
+          shared_change = False
+
+          for path in changed:
+              parts = Path(path).parts
+              if len(parts) >= 3 and parts[0] == "src":
+                  module = f"{parts[1]}/{parts[2]}"
+                  if Path("src", parts[1], parts[2], "build.gradle").exists():
+                      modules.add(module)
+              elif (
+                  path.startswith(("core/", "lib/", "lib-multisrc/", "buildSrc/", "gradle/"))
+                  or path in {"common.gradle", "gradle.properties", "settings.gradle.kts"}
+                  or path.startswith(".github/")
+              ):
+                  shared_change = True
+
+          if shared_change or "${{ github.event_name }}" == "workflow_dispatch":
+              modules.update(published_modules())
+
+          modules = sorted(modules)
+          tasks = " ".join(f":src:{module.replace('/', ':')}:assembleRelease" for module in modules)
+
+          print(f"modules={' '.join(modules)}")
+          print(f"tasks={tasks}")
+          print(f"count={len(modules)}")
+          PY
+
+          cat "$GITHUB_OUTPUT"
+
+      - name: Configure selected extensions
+        if: steps.select.outputs.count != '0'
+        env:
+          BUILD_MODULES: ${{ steps.select.outputs.modules }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          modules = os.environ["BUILD_MODULES"].split()
+          settings = Path("settings.gradle.kts")
+          text = settings.read_text()
+          lines = []
+          for line in text.splitlines():
+              if line.strip().startswith("loadIndividualExtension("):
+                  lines.append("// " + line)
+              else:
+                  lines.append(line)
+
+          text = "\n".join(lines) + "\n"
+          marker = "/**\n * ===================================== COMMON CONFIGURATION ======================================"
+          selected = "\n".join(
+              f'loadIndividualExtension("{lang}", "{name}")'
+              for lang, name in (module.split("/", 1) for module in modules)
+          )
+          text = text.replace(marker, f"// CI selected extensions\n{selected}\n\n{marker}", 1)
+          settings.write_text(text)
+          PY
+
+      - name: Build selected extensions
+        if: steps.select.outputs.count != '0'
         env:
           ALIAS: ${{ secrets.ALIAS }}
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew --no-daemon :src:hi:toonstream:assembleRelease
+        run: ./gradlew --no-daemon ${{ steps.select.outputs.tasks }}
 
       - name: Create extension repo artifacts
+        if: steps.select.outputs.count != '0'
         env:
+          BUILD_MODULES: ${{ steps.select.outputs.modules }}
+          REPO_PUSH_TOKEN: ${{ secrets.REPO_PUSH_TOKEN }}
           SIGNING_KEY_FINGERPRINT: ${{ secrets.SIGNING_KEY_FINGERPRINT }}
         run: |
+          git clone --depth 1 --branch "$OUTPUT_BRANCH" "https://x-access-token:${REPO_PUSH_TOKEN}@github.com/${OUTPUT_REPO}.git" out || true
+          if [ ! -d out/.git ]; then
+            git clone --depth 1 "https://x-access-token:${REPO_PUSH_TOKEN}@github.com/${OUTPUT_REPO}.git" out
+            cd out
+            git checkout --orphan "$OUTPUT_BRANCH"
+            git rm -rf . || true
+            cd ..
+          fi
+
           mkdir -p repo/apk
-          cp src/hi/toonstream/build/outputs/apk/release/*-release.apk repo/apk/
+          cp -r out/* repo/ 2>/dev/null || true
+          mkdir -p repo/apk
+
+          for module in $BUILD_MODULES; do
+            lang="${module%%/*}"
+            name="${module#*/}"
+            rm -f "repo/apk/aniyomi-${lang}.${name}-v"*.apk
+            cp "src/${lang}/${name}/build/outputs/apk/release/"*-release.apk repo/apk/
+          done
+
           for apk in repo/apk/*-release.apk; do
             mv "$apk" "${apk%-release.apk}.apk"
           done
@@ -86,18 +210,10 @@ jobs:
           EOF
 
       - name: Publish to anime-repo
+        if: steps.select.outputs.count != '0'
         env:
           REPO_PUSH_TOKEN: ${{ secrets.REPO_PUSH_TOKEN }}
         run: |
-          git clone --depth 1 --branch "$OUTPUT_BRANCH" "https://x-access-token:${REPO_PUSH_TOKEN}@github.com/${OUTPUT_REPO}.git" out || true
-          if [ ! -d out/.git ]; then
-            git clone --depth 1 "https://x-access-token:${REPO_PUSH_TOKEN}@github.com/${OUTPUT_REPO}.git" out
-            cd out
-            git checkout --orphan "$OUTPUT_BRANCH"
-            git rm -rf . || true
-            cd ..
-          fi
-
           rm -rf out/*
           cp -r repo/* out/
           cd out
