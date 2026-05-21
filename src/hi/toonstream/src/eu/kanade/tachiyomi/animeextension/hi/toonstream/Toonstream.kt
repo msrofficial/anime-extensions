@@ -92,7 +92,7 @@ class Toonstream :
         val base = currentBaseUrl()
 
         return when {
-            query.isNotBlank() -> GET("$base/page/$page/?s=$query", headers)
+            query.isNotBlank() -> GET(base.searchUrl(query, page), headers)
             category.isNotBlank() -> GET(base.pageUrl(category, page), headers)
             else -> popularAnimeRequest(page)
         }
@@ -103,8 +103,7 @@ class Toonstream :
     private fun parseListing(response: Response): AnimesPage {
         val document = response.asJsoup()
         val entries = document.select("#movies-a > ul > li").map { it.toAnime() }
-        val hasNextPage = document.select("a.next.page-numbers, .pagination a.next").any() ||
-            document.select("#movies-a > ul > li").isNotEmpty()
+        val hasNextPage = document.select("a.next.page-numbers, .pagination a.next").any()
         return AnimesPage(entries, hasNextPage)
     }
 
@@ -421,6 +420,15 @@ class Toonstream :
         "$this/$path/"
     } else {
         "$this/$path/page/$page/"
+    }
+
+    private fun String.searchUrl(query: String, page: Int): String {
+        val path = if (page <= 1) "/" else "/page/$page/"
+        return toHttpUrl().newBuilder()
+            .encodedPath(path)
+            .addQueryParameter("s", query)
+            .build()
+            .toString()
     }
 
     private fun String.fixUrl(base: String): String = when {
