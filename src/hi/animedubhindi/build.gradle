@@ -1,7 +1,7 @@
 ext {
     extName = 'AnimeDubHindi'
     extClass = '.AnimeDubHindi'
-    extVersionCode = 3
+    extVersionCode = 4
 }
 
 apply from: "$rootDir/common.gradle"

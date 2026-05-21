@@ -120,13 +120,13 @@ class AnimeDubHindi : AnimeHttpSource() {
 
         document.select("div.wp-block-group").forEachIndexed { index, block ->
             val episodeNumber = block.text().episodeNumber()
-            if (episodeNumber != null && block.select("a[href]").hasDownloadHost()) {
+            if (episodeNumber != null && block.select("a[href]").hasDownloadLink()) {
                 episodes += SEpisode.create().apply {
                     url = linksPage.withEpisodeQuery(episodeNumber)
                     name = "Episode $episodeNumber"
                     episode_number = episodeNumber.toFloat()
                 }
-            } else if (episodes.isEmpty() && block.select("a[href]").hasDownloadHost()) {
+            } else if (episodes.isEmpty() && block.select("a[href]").hasDownloadLink()) {
                 val label = block.selectFirst("h2, h3, h4")?.ownText()?.ifBlank { null } ?: "Movie"
                 episodes += SEpisode.create().apply {
                     url = linksPage.withSectionQuery(index)
@@ -137,7 +137,7 @@ class AnimeDubHindi : AnimeHttpSource() {
         }
 
         document.select("div.pro-ep-card").forEachIndexed { index, card ->
-            if (!card.select("a[href]").hasDownloadHost()) return@forEachIndexed
+            if (!card.select("a[href]").hasDownloadLink()) return@forEachIndexed
             val title = card.selectFirst(".pro-ep-title")?.text().orEmpty()
             val episodeNumber = title.episodeNumber() ?: (index + 1)
             episodes += SEpisode.create().apply {
@@ -164,7 +164,7 @@ class AnimeDubHindi : AnimeHttpSource() {
             episode != null -> document.select("div.wp-block-group, div.pro-ep-card")
                 .filter { it.text().episodeNumber() == episode }
             section != null -> document.select("div.wp-block-group").getOrNull(section)?.let(::listOf).orEmpty()
-            else -> document.select("div.wp-block-group, div.pro-ep-card").filter { it.select("a[href]").hasDownloadHost() }
+            else -> document.select("div.wp-block-group, div.pro-ep-card").filter { it.select("a[href]").hasDownloadLink() }
         }.ifEmpty { listOf(document.body()) }
 
         return targets.flatMap { it.extractDownloadItems() }
@@ -206,6 +206,11 @@ class AnimeDubHindi : AnimeHttpSource() {
             lower.contains("gofile") -> goFileVideos(url, prefix)
             lower.contains("pixeldrain") || lower.contains("pixeldra") -> pixelDrainExtractor.videosFromUrl(url, "$prefix - ")
             lower.contains("hubcloud") -> hubCloudVideos(url, prefix).ifEmpty { listOf(Video(url, "$prefix - HubCloud", url)) }
+            lower.contains("gdtot") -> listOf(Video(url, "$prefix - GDTOT (external)", url))
+            lower.contains("gdmirrorbot") -> listOf(Video(url, "$prefix - Multi (external)", url))
+            lower.contains("terabox") || lower.contains("1024tera") -> listOf(Video(url, "$prefix - TeraBox (external)", url))
+            lower.contains("mega.nz") -> listOf(Video(url, "$prefix - MEGA (external)", url))
+            lower.contains("desidubanime") -> desiDubAnimeVideos(url, prefix)
             lower.isDirectVideoUrl() || lower.contains("r2.dev") || lower.contains("busycdn") || lower.contains("indexserver") -> {
                 listOf(Video(url, "$prefix - Direct", url))
             }
@@ -285,6 +290,14 @@ class AnimeDubHindi : AnimeHttpSource() {
         }
 
         return videos
+    }
+
+    private fun desiDubAnimeVideos(url: String, prefix: String): List<Video> {
+        val document = client.newCall(GET(url, headers)).execute().asJsoup()
+        val watchUrl = document.selectFirst("a[href*=/watch/]")?.attr("abs:href") ?: url
+        val watchDocument = client.newCall(GET(watchUrl, headers)).execute().asJsoup()
+        val iframe = watchDocument.selectFirst("iframe[src]")?.attr("abs:src") ?: return listOf(Video(watchUrl, "$prefix - Watch online", watchUrl))
+        return listOf(Video(iframe, "$prefix - Watch online", iframe))
     }
 
     private fun goFileVideos(url: String, prefix: String): List<Video> {
@@ -374,7 +387,11 @@ class AnimeDubHindi : AnimeHttpSource() {
         ?.trim()
         .orEmpty()
 
-    private fun List<Element>.hasDownloadHost(): Boolean = any { it.attr("abs:href").isPlayableHost() || it.attr("href").isPlayableHost() }
+    private fun List<Element>.hasDownloadLink(): Boolean = any {
+        val label = it.text().lowercase()
+        val href = it.attr("abs:href").ifBlank { it.attr("href") }
+        href.isPlayableHost() || label in DOWNLOAD_LINK_LABELS
+    }
 
     private fun String.isPlayableHost(): Boolean {
         val lower = lowercase()
@@ -383,6 +400,12 @@ class AnimeDubHindi : AnimeHttpSource() {
             lower.contains("gofile") ||
             lower.contains("pixeldrain") ||
             lower.contains("pixeldra") ||
+            lower.contains("gdtot") ||
+            lower.contains("gdmirrorbot") ||
+            lower.contains("terabox") ||
+            lower.contains("1024tera") ||
+            lower.contains("mega.nz") ||
+            lower.contains("desidubanime") ||
             lower.contains("r2.dev") ||
             lower.contains("busycdn") ||
             lower.contains("indexserver") ||
@@ -418,5 +441,6 @@ class AnimeDubHindi : AnimeHttpSource() {
         private const val SECTION_QUERY = "aniyomi_section"
         private const val GOFILE_URL = "https://gofile.io"
         private const val GOFILE_API = "https://api.gofile.io"
+        private val DOWNLOAD_LINK_LABELS = setOf("mega", "gdtot", "multi", "tera", "hcloud", "gdf", "fprs", "click here")
     }
 }
