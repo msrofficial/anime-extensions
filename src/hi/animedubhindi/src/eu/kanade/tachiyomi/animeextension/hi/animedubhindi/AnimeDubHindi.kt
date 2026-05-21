@@ -106,7 +106,7 @@ class AnimeDubHindi : AnimeHttpSource() {
         return episodes.ifEmpty {
             linksPages.mapIndexed { index, linksPage ->
                 SEpisode.create().apply {
-                    setUrlWithoutDomain(linksPage)
+                    url = linksPage
                     name = if (linksPages.size == 1) "Movie" else "Movie ${index + 1}"
                     episode_number = (index + 1).toFloat()
                 }
@@ -122,14 +122,14 @@ class AnimeDubHindi : AnimeHttpSource() {
             val episodeNumber = block.text().episodeNumber()
             if (episodeNumber != null && block.select("a[href]").hasDownloadHost()) {
                 episodes += SEpisode.create().apply {
-                    setUrlWithoutDomain(linksPage.withEpisodeQuery(episodeNumber))
+                    url = linksPage.withEpisodeQuery(episodeNumber)
                     name = "Episode $episodeNumber"
                     episode_number = episodeNumber.toFloat()
                 }
             } else if (episodes.isEmpty() && block.select("a[href]").hasDownloadHost()) {
                 val label = block.selectFirst("h2, h3, h4")?.ownText()?.ifBlank { null } ?: "Movie"
                 episodes += SEpisode.create().apply {
-                    setUrlWithoutDomain(linksPage.withSectionQuery(index))
+                    url = linksPage.withSectionQuery(index)
                     name = label.cleanEpisodeName()
                     episode_number = (index + 1).toFloat()
                 }
@@ -141,7 +141,7 @@ class AnimeDubHindi : AnimeHttpSource() {
             val title = card.selectFirst(".pro-ep-title")?.text().orEmpty()
             val episodeNumber = title.episodeNumber() ?: (index + 1)
             episodes += SEpisode.create().apply {
-                setUrlWithoutDomain(linksPage.withEpisodeQuery(episodeNumber))
+                url = linksPage.withEpisodeQuery(episodeNumber)
                 name = title.ifBlank { "Episode $episodeNumber" }.cleanEpisodeName()
                 episode_number = episodeNumber.toFloat()
             }
