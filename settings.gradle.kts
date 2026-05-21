@@ -3,6 +3,7 @@
  */
 // loadAllIndividualExtensions()
 loadIndividualExtension("hi", "toonstream")
+loadIndividualExtension("hi", "animedubhindi")
 
 /**
  * ===================================== COMMON CONFIGURATION ======================================
