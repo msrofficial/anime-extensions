@@ -30,7 +30,7 @@ class MovieBox : AnimeHttpSource() {
 
     override val baseUrl = "https://api3.aoneroom.com"
 
-    override val lang = "hi"
+    override val lang = "all"
 
     override val supportsLatest = true
 
@@ -44,7 +44,7 @@ class MovieBox : AnimeHttpSource() {
     // ============================== Popular ===============================
 
     override fun popularAnimeRequest(page: Int): Request {
-        val url = "$baseUrl/wefeed-mobile-bff/tab/ranking-list?tabId=0&categoryType=8434602210994128512&page=$page&perPage=20"
+        val url = "$baseUrl/wefeed-mobile-bff/tab/ranking-list?tabId=0&categoryType=8610422883619422240&page=$page&perPage=20"
         return GET(url, apiHeaders("GET", url, accept = "application/json", contentType = "application/json"))
     }
 
@@ -53,12 +53,17 @@ class MovieBox : AnimeHttpSource() {
     // =============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val body = """{"page":$page,"perPage":20,"channelId":"1","classify":"All","country":"All","year":"All","genre":"All","sort":"Latest"}"""
-        val url = "$baseUrl/wefeed-mobile-bff/subject-api/list"
-        return POST(url, apiHeaders("POST", url, body = body), body.toRequestBody(JSON))
+        val url = "$baseUrl/wefeed-mobile-bff/tab/ranking-list?tabId=0&categoryType=8610422883619422240&page=$page&perPage=20"
+        return GET(url, apiHeaders("GET", url, accept = "application/json", contentType = "application/json"))
     }
 
-    override fun latestUpdatesParse(response: Response): AnimesPage = parseListing(response)
+    override fun latestUpdatesParse(response: Response): AnimesPage {
+        val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
+        val entries = listOf("1", "2", "1006").flatMap { channelId ->
+            runCatching { fetchListPage(channelId, page) }.getOrDefault(emptyList())
+        }.distinctBy { it.url }
+        return AnimesPage(entries, entries.isNotEmpty())
+    }
 
     private fun parseListing(response: Response): AnimesPage {
         val root = JSONObject(response.body.string())
@@ -83,9 +88,13 @@ class MovieBox : AnimeHttpSource() {
 
     override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
         if (query.isBlank()) return popularAnimeRequest(page)
-        val body = """{"page": $page, "perPage": 20, "keyword": "$query"}"""
+        val body = JSONObject()
+            .put("page", page)
+            .put("perPage", 20)
+            .put("keyword", query)
+            .toString()
         val url = "$baseUrl/wefeed-mobile-bff/subject-api/search/v2"
-        return POST(url, apiHeaders("POST", url, body = body), body.toRequestBody(JSON))
+        return POST(url, apiHeaders("POST", url, body = body), body.toRequestBody(JSON_UTF8))
     }
 
     override fun searchAnimeParse(response: Response): AnimesPage {
@@ -96,6 +105,28 @@ class MovieBox : AnimeHttpSource() {
             group.optJSONArray("subjects")?.toObjectList().orEmpty().mapNotNullTo(entries) { it.toAnime() }
         }
         return AnimesPage(entries.distinctBy { it.url }, entries.isNotEmpty())
+    }
+
+    private fun fetchListPage(channelId: String, page: Int): List<SAnime> {
+        val body = JSONObject()
+            .put("page", page)
+            .put("perPage", 10)
+            .put("channelId", channelId)
+            .put("classify", "All")
+            .put("country", "All")
+            .put("year", "All")
+            .put("genre", "All")
+            .put("sort", "Latest")
+            .toString()
+        val url = "$baseUrl/wefeed-mobile-bff/subject-api/list"
+        val response = client.newCall(
+            POST(url, apiHeaders("POST", url, body = body), body.toRequestBody(JSON_UTF8)),
+        ).execute()
+        return response.use {
+            val data = JSONObject(it.body.string()).optJSONObject("data") ?: return emptyList()
+            val items = data.optJSONArray("items") ?: data.optJSONArray("subjects") ?: return emptyList()
+            items.toObjectList().mapNotNull { item -> item.toAnime() }
+        }
     }
 
     // =========================== Anime Details ============================
@@ -280,12 +311,12 @@ class MovieBox : AnimeHttpSource() {
         method: String,
         url: String,
         accept: String = "application/json",
-        contentType: String = "application/json",
+        contentType: String = "application/json; charset=utf-8",
         body: String? = null,
     ): Headers = Headers.Builder()
         .add("user-agent", USER_AGENT)
         .add("accept", accept)
-        .add("content-type", "application/json")
+        .add("content-type", contentType)
         .add("connection", "keep-alive")
         .add("x-client-token", xClientToken())
         .add("x-tr-signature", xTrSignature(method, accept, contentType, url, body))
@@ -397,7 +428,7 @@ class MovieBox : AnimeHttpSource() {
     }
 
     companion object {
-        private val JSON = "application/json".toMediaType()
+        private val JSON_UTF8 = "application/json; charset=utf-8".toMediaType()
         private const val USER_AGENT = "com.community.mbox.in/50020042 (Linux; U; Android 16; en_IN; sdk_gphone64_x86_64; Build/BP22.250325.006; Cronet/133.0.6876.3)"
         private const val PLAY_USER_AGENT = "com.community.oneroom/50020088 (Linux; U; Android 13; en_US; Pixel 7; Build/TQ3A.230901.001; Cronet/145.0.7582.0)"
     }
