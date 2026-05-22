@@ -70,7 +70,7 @@ class MovieBox : AnimeHttpSource() {
         val data = root.optJSONObject("data") ?: return AnimesPage(emptyList(), false)
         val items = data.optJSONArray("items") ?: data.optJSONArray("subjects") ?: data.optJSONArray("categoryList")
         val entries = items?.toObjectList().orEmpty().mapNotNull { it.toAnime() }
-        return AnimesPage(entries, entries.isNotEmpty())
+        return AnimesPage(entries, data.hasMore())
     }
 
     private fun JSONObject.toAnime(): SAnime? {
@@ -99,12 +99,13 @@ class MovieBox : AnimeHttpSource() {
 
     override fun searchAnimeParse(response: Response): AnimesPage {
         val root = JSONObject(response.body.string())
-        val results = root.optJSONObject("data")?.optJSONArray("results") ?: return AnimesPage(emptyList(), false)
+        val data = root.optJSONObject("data") ?: return AnimesPage(emptyList(), false)
+        val results = data.optJSONArray("results") ?: return AnimesPage(emptyList(), false)
         val entries = mutableListOf<SAnime>()
         results.toObjectList().forEach { group ->
             group.optJSONArray("subjects")?.toObjectList().orEmpty().mapNotNullTo(entries) { it.toAnime() }
         }
-        return AnimesPage(entries.distinctBy { it.url }, entries.isNotEmpty())
+        return AnimesPage(entries.distinctBy { it.url }, data.hasMore())
     }
 
     private fun fetchListPage(channelId: String, page: Int): List<SAnime> {
@@ -429,6 +430,11 @@ class MovieBox : AnimeHttpSource() {
     }
 
     private fun JSONArray.toObjectList(): List<JSONObject> = List(length()) { index -> optJSONObject(index) }.filterNotNull()
+
+    private fun JSONObject.hasMore(): Boolean {
+        val pager = optJSONObject("pager") ?: return false
+        return pager.optBoolean("hasMore", false)
+    }
 
     private fun JSONObject.displayTitle(): String {
         val rawTitle = optString("title").trim()
