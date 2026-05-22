@@ -1,0 +1,7 @@
+ext {
+    extName = 'MovieBox'
+    extClass = '.MovieBox'
+    extVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"

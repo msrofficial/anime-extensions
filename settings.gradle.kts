@@ -4,6 +4,7 @@
 // loadAllIndividualExtensions()
 loadIndividualExtension("hi", "toonstream")
 loadIndividualExtension("hi", "animedubhindi")
+loadIndividualExtension("hi", "moviebox")
 
 /**
  * ===================================== COMMON CONFIGURATION ======================================
