@@ -78,7 +78,7 @@ class MovieBox : AnimeHttpSource() {
         if (id.isBlank()) return null
         return SAnime.create().apply {
             url = "/subject/$id"
-            title = optString("title").substringBefore("[").trim()
+            title = displayTitle()
             thumbnail_url = optJSONObject("cover")?.optString("url")?.ifBlank { null }
             status = SAnime.UNKNOWN
         }
@@ -141,7 +141,7 @@ class MovieBox : AnimeHttpSource() {
         val data = JSONObject(response.body.string()).optJSONObject("data") ?: JSONObject()
         return SAnime.create().apply {
             url = "/subject/${data.optString("subjectId")}"
-            title = data.optString("title").substringBefore("[").trim()
+            title = data.displayTitle()
             thumbnail_url = data.optJSONObject("cover")?.optString("url")?.ifBlank { null }
             description = data.optString("description").ifBlank { null }
             genre = data.optString("genre").ifBlank { null }
@@ -254,6 +254,8 @@ class MovieBox : AnimeHttpSource() {
             val format = stream.optString("format")
             val videoHeaders = Headers.Builder()
                 .add("Referer", baseUrl)
+                .add("User-Agent", PLAY_USER_AGENT)
+                .add("Accept", "*/*")
                 .apply { if (signCookie != null) add("Cookie", signCookie) }
                 .build()
             Video(
@@ -277,7 +279,19 @@ class MovieBox : AnimeHttpSource() {
             detector.optJSONArray("resolutionList")?.toObjectList().orEmpty().mapNotNull { item ->
                 val link = item.optString("resourceLink").ifBlank { return@mapNotNull null }
                 val quality = item.optInt("resolution", 0).takeIf { it > 0 }?.let { "${it}p" } ?: "Video"
-                Video(link, "$name $language - $quality", link, headers = Headers.headersOf("Referer", baseUrl))
+                Video(
+                    link,
+                    "$name $language - $quality",
+                    link,
+                    headers = Headers.headersOf(
+                        "Referer",
+                        baseUrl,
+                        "User-Agent",
+                        PLAY_USER_AGENT,
+                        "Accept",
+                        "*/*",
+                    ),
+                )
             }
         }
     }
@@ -415,6 +429,17 @@ class MovieBox : AnimeHttpSource() {
     }
 
     private fun JSONArray.toObjectList(): List<JSONObject> = List(length()) { index -> optJSONObject(index) }.filterNotNull()
+
+    private fun JSONObject.displayTitle(): String {
+        val rawTitle = optString("title").trim()
+        if (rawTitle.isBlank()) return rawTitle
+        val language = optString("language")
+        return when {
+            rawTitle.contains("[") -> rawTitle
+            language.contains("Hindi", ignoreCase = true) -> "$rawTitle [Hindi]"
+            else -> rawTitle
+        }
+    }
 
     private fun String.qualityLabel(): String = when {
         contains("2160") -> "2160p"
