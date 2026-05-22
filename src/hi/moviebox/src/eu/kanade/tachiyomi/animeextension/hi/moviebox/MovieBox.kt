@@ -120,6 +120,8 @@ class MovieBox : AnimeHttpSource() {
 
     // ============================== Episodes ==============================
 
+    override fun episodeListRequest(anime: SAnime): Request = animeDetailsRequest(anime)
+
     override fun episodeListParse(response: Response): List<SEpisode> {
         val data = JSONObject(response.body.string()).optJSONObject("data") ?: return emptyList()
         val id = data.optString("subjectId").ifBlank {
