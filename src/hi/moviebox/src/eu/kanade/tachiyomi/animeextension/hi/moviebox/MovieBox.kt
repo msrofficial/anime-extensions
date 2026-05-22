@@ -182,7 +182,7 @@ class MovieBox : AnimeHttpSource() {
 
     // ============================ Video Links =============================
 
-    override fun videoListRequest(episode: SEpisode): Request = GET(episode.url, headers)
+    override fun videoListRequest(episode: SEpisode): Request = GET(episode.url, playHeaders("GET", episode.url))
 
     override fun videoListParse(response: Response): List<Video> {
         val subjectId = response.request.url.queryParameter("subjectId").orEmpty()
@@ -369,7 +369,7 @@ class MovieBox : AnimeHttpSource() {
 
     private fun md5(input: ByteArray): String = MessageDigest.getInstance("MD5").digest(input).joinToString("") { "%02x".format(it) }
 
-    private fun playUrl(subjectId: String, season: Int, episode: Int): String = "$baseUrl/__aniyomi__/play?subjectId=$subjectId&se=$season&ep=$episode"
+    private fun playUrl(subjectId: String, season: Int, episode: Int): String = "$baseUrl/wefeed-mobile-bff/subject-api/play-info?subjectId=$subjectId&se=$season&ep=$episode"
 
     private fun randomBrandModel(): Pair<String, String> {
         val brandModels = mapOf(
