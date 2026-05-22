@@ -10,7 +10,7 @@ This repo currently keeps only MSR-maintained extensions:
 - `src/hi/animedubhindi`
 - `src/hi/moviebox`
 
-Do not re-add the full upstream extension set. New sources should be added one by one after they are ported and checked.
+Do not re-add a large unrelated extension set. New sources should be added one by one after they are checked and tested.
 
 ## Requirements
 

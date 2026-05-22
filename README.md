@@ -2,7 +2,7 @@
 
 Source code for MSR's Aniyomi/Anikku extensions.
 
-This repository is intentionally small. It only contains extensions maintained here; more sources will be added gradually after they are ported, tested, and published.
+This repository is intentionally small. It only contains extensions maintained here; more sources will be added gradually after they are checked, tested, and published.
 
 ## Add The Extension Repo
 

@@ -32,4 +32,4 @@ Before opening an issue:
 
 ## Notes
 
-Attach screenshots, screen recordings, or the exact anime/episode/server when reporting playback or download issues.
+Attach screenshots, screen recordings, or the exact anime/episode/server for playback or download issues.
